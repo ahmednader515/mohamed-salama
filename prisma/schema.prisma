@@ -1,0 +1,162 @@
+// منصة تعليمية - Prisma Schema
+// متوافق مع Vercel (PostgreSQL موصى به)
+//
+// على Vercel: يجب تعيين DATABASE_URL من Settings → Environment Variables
+// (رابط PostgreSQL من Neon أو Supabase أو Vercel Postgres) ثم Redeploy.
+// راجع ENV_VERCEL.md للمتغيرات المطلوبة.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN           // متحكم: إنشاء كورسات، متابعة طلاب، إضافة رصيد
+  ASSISTANT_ADMIN // مساعد أدمن: إنشاء كورسات ومتابعة طلاب (بدون إضافة رصيد)
+  STUDENT         // طالب: الرتبة الافتراضية عند إنشاء الحساب
+  TEACHER         // مدرس: كورساته فقط، يظهر في «اختر المدرسين» عند تفعيل الميزة
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  password       String        @map("password_hash")
+  name           String
+  role           UserRole      @default(STUDENT)
+  balance        Decimal       @default(0) @db.Decimal(10, 2) // رصيد الطالب (يُستخدم للأدمن)
+  copyrightCode  String?       @unique @map("copyright_code") @db.VarChar(10) // كود حقوق الطبع للطالب (مثل A0125)
+  teacherSubject String?       @map("teacher_subject")
+  teacherAvatarUrl String?     @map("teacher_avatar_url")
+  /// 1–4 = ترتيب البطاقة في الرئيسية؛ null = يُكمّل تلقائياً بعد المحددين (حتى 4)
+  teacherHomepageOrder Int?    @map("teacher_homepage_order")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  enrollments    Enrollment[]
+  coursesCreated Course[]      @relation("CourseCreator")
+  quizAttempts   QuizAttempt[]
+  categoriesCreated Category[] @relation("CategoryCreator")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String?  @map("name_ar")
+  slug        String   @unique
+  description String?
+  imageUrl    String?  @map("image_url")
+  order       Int      @default(0)
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  courses     Course[]
+  createdBy   User?    @relation("CategoryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+model Course {
+  id               String   @id @default(cuid())
+  title            String
+  titleAr          String?  @map("title_ar")
+  slug             String   @unique
+  description      String   @db.Text
+  shortDesc        String?  @map("short_desc") @db.VarChar(300)
+  imageUrl         String?  @map("image_url")
+  price            Decimal  @default(0) @db.Decimal(10, 2) // سعر الكورس
+  duration         String?  // مثل "4 أسابيع" أو "12 ساعة"
+  level            String?  // beginner | intermediate | advanced
+  isPublished      Boolean  @default(false) @map("is_published")
+  order            Int      @default(0)
+  maxQuizAttempts  Int?     @map("max_quiz_attempts") // حد مرات دخول الاختبار في الكورس (null = غير محدود)
+  categoryId       String?  @map("category_id")
+  createdById      String?  @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy        User?    @relation("CourseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lessons          Lesson[]
+  quizzes          Quiz[]
+  enrollments      Enrollment[]
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE // اختياري
+  ESSAY          // مقالي
+  TRUE_FALSE     // صح وخطأ
+}
+
+model Quiz {
+  id               String        @id @default(cuid())
+  title            String
+  courseId         String        @map("course_id")
+  order            Int           @default(0)
+  timeLimitMinutes Int?          @map("time_limit_minutes") // وقت الاختبار بالدقائق (null = غير محدود)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  course           Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions        Question[]
+  quizAttempts     QuizAttempt[]
+}
+
+model Question {
+  id           String       @id @default(cuid())
+  type         QuestionType
+  questionText String       @map("question_text") @db.Text
+  order        Int          @default(0)
+  quizId       String       @map("quiz_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  quiz         Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options      QuestionOption[]
+}
+
+model QuestionOption {
+  id        String   @id @default(cuid())
+  text      String   @db.Text
+  isCorrect Boolean  @default(false) @map("is_correct")
+  questionId String  @map("question_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  question  Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model Enrollment {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  courseId   String   @map("course_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  @@unique([userId, courseId])
+}
+
+model QuizAttempt {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  quizId         String   @map("quiz_id")
+  score          Int      // عدد الإجابات الصحيحة
+  totalQuestions Int      @map("total_questions")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz           Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  title     String
+  titleAr   String?  @map("title_ar")
+  slug      String
+  content   String?  @db.Text
+  videoUrl  String?  @map("video_url")
+  pdfUrl    String?  @map("pdf_url")
+  duration  Int?     // بالدقائق (اختياري - غير مستخدم في النموذج)
+  order     Int      @default(0)
+  courseId  String   @map("course_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  @@unique([courseId, slug])
+}

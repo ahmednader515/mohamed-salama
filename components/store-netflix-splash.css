@@ -1,0 +1,279 @@
+/* شاشة دخول المتجر — نفس أسلوب Netflix (أسماء فريدة nfs-* لتفادي التعارض) */
+/* ألوان التركواز/الأساسي مثل زر «إنشاء حساب» (var(--color-primary)) */
+.nfs-wrap {
+  --nfs-primary: var(--color-primary);
+  --nfs-bg: #000000;
+  --nfs-animation-time: 3.5s;
+  --nfs-glow-intensity: 22px;
+  --nfs-exit-fade: 0.75s;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: var(--nfs-bg);
+  overflow: hidden;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  opacity: 1;
+  transition: opacity var(--nfs-exit-fade) cubic-bezier(0.33, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+.nfs-wrap.nfs-wrap--exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nfs-splash {
+  display: block;
+  position: relative;
+  width: 300px;
+  height: 300px;
+  overflow: hidden;
+  /* منحنى أوضح من ease-in لتقليل الشعور بالتقطيع في آخر التكبير */
+  animation: nfs-scale-up var(--nfs-animation-time) 0.5s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+  background-size: 4000px;
+  background-position: -1950px 0;
+  transform-origin: 50% center;
+  transform: translate3d(0, 0, 0);
+  contain: paint;
+  backface-visibility: hidden;
+}
+
+.nfs-splash::before {
+  content: "";
+  position: absolute;
+  display: block;
+  background-color: var(--nfs-bg);
+  width: 150%;
+  height: 30%;
+  left: -25%;
+  bottom: -27%;
+  border-radius: 50%;
+  z-index: 5;
+  transform-origin: left center;
+}
+
+.nfs-seg {
+  position: absolute;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+/* حرف M: عمودان + خطان مائلان يلتقيان في أسفل الوسط */
+.nfs-seg-m-d1,
+.nfs-seg-m-d2 {
+  z-index: 1;
+}
+
+.nfs-seg-m-l,
+.nfs-seg-m-r {
+  z-index: 2;
+}
+
+/* عمود أيسر */
+.nfs-seg-m-l {
+  width: 14%;
+  height: 100%;
+  left: 8%;
+  top: 0;
+  background-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  transform: rotate(180deg) translate3d(0, 0, 0);
+  animation: nfs-fade-segment 2s 0.6s forwards;
+}
+
+/* عمود أيمن */
+.nfs-seg-m-r {
+  width: 14%;
+  height: 100%;
+  left: 78%;
+  top: 0;
+  transform: rotate(180deg) translate3d(0, 0, 0);
+  overflow: hidden;
+}
+
+/* ضلع M الداخلي الأيسر \ */
+.nfs-seg-m-d1 {
+  width: 12%;
+  height: 148%;
+  left: 29%;
+  top: -22%;
+  transform: rotate(29deg) translate3d(0, 0, 0);
+  transform-origin: center center;
+  overflow: hidden;
+}
+
+/* ضلع M الداخلي الأيمن / */
+.nfs-seg-m-d2 {
+  width: 12%;
+  height: 148%;
+  left: 57%;
+  top: -22%;
+  transform: rotate(-29deg) translate3d(0, 0, 0);
+  transform-origin: center center;
+  overflow: hidden;
+}
+
+.nfs-grad {
+  position: absolute;
+  width: 100%;
+  height: 300%;
+  top: 0;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.nfs-seg-m-l .nfs-grad {
+  animation: nfs-gradient-flow 2.5s 1.2s forwards;
+}
+
+.nfs-seg-m-r .nfs-grad {
+  animation: nfs-gradient-flow 2s 0.5s forwards;
+}
+
+.nfs-seg-m-d1 .nfs-grad {
+  animation: nfs-gradient-flow 2.1s 0.75s forwards;
+}
+
+.nfs-seg-m-d2 .nfs-grad {
+  animation: nfs-gradient-flow 2.1s 0.95s forwards;
+}
+
+.nfs-grad::before {
+  display: block;
+  content: "";
+  position: absolute;
+  background-color: var(--nfs-primary);
+  width: 100%;
+  height: 70%;
+  /* ظل واحد أخف — أقل تكلفة على GPU من طبقتين كبيرتين */
+  box-shadow: 0 0 var(--nfs-glow-intensity) 12px color-mix(in srgb, var(--nfs-primary) 55%, transparent);
+}
+
+.nfs-seg-m-l .nfs-grad [class^="nfs-strip-"] {
+  bottom: 0;
+  height: 40%;
+}
+
+.nfs-beams {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  animation: nfs-reveal-beams 2s 1.6s forwards;
+  transform: translate3d(0, 0, 0);
+}
+
+.nfs-beam {
+  position: absolute;
+  display: block;
+  height: 100%;
+  background: var(--color);
+  opacity: 0.92;
+  border-radius: 1px;
+  /* بدون filter وبدون ::before مزدوج — أخف كثيراً أثناء الحركة */
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--color) 70%, transparent);
+}
+
+.nfs-beam-left {
+  animation: nfs-move-left 5s forwards;
+}
+
+.nfs-beam-right {
+  animation: nfs-move-right 5s forwards;
+}
+
+[class^="nfs-strip-"] {
+  display: block;
+  position: absolute;
+  bottom: 10%;
+  height: 30%;
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+@keyframes nfs-gradient-flow {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, -100%, 0);
+  }
+}
+
+@keyframes nfs-move-right {
+  0% {
+    transform: translate3d(0, 0, 0) scaleX(1);
+    opacity: 0.85;
+  }
+  40% {
+    transform: translate3d(-10px, 0, 0) scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(-60px, 0, 0) scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-120px, 0, 0) scaleX(2.5);
+    opacity: 0.85;
+  }
+}
+
+@keyframes nfs-move-left {
+  0% {
+    transform: translate3d(0, 0, 0) scaleX(1);
+    opacity: 0.85;
+  }
+  40% {
+    transform: translate3d(10px, 0, 0) scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(60px, 0, 0) scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(120px, 0, 0) scaleX(2.5);
+    opacity: 0.85;
+  }
+}
+
+@keyframes nfs-scale-up {
+  0% {
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale3d(15, 15, 1);
+  }
+}
+
+@keyframes nfs-reveal-beams {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.3;
+  }
+  60% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes nfs-fade-segment {
+  0% {
+    background-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+  100% {
+    background-color: color-mix(in srgb, var(--color-primary) 0%, transparent);
+  }
+}
