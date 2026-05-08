@@ -301,6 +301,12 @@ export function YouTubeOverlayPlayer({
       new window.YT!.Player(playerDiv, {
         videoId,
         playerVars: {
+          // نخفي واجهة يوتيوب بالكامل ونعتمد على عناصر التحكم المخصصة
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          cc_load_policy: 0,
           playsinline: 1,
           rel: 0,
           modestbranding: 1,
@@ -435,6 +441,7 @@ export function YouTubeOverlayPlayer({
 
   const pendingSingleTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<{ at: number; side: "left" | "right" } | null>(null);
+  const suppressClickUntilRef = useRef(0);
   const DOUBLE_TAP_MS = 320;
 
   const handleTapOrClick = useCallback(
@@ -522,13 +529,56 @@ export function YouTubeOverlayPlayer({
     const el = wrapperRef.current;
     if (!el) return;
     try {
-      if (!document.fullscreenElement) {
-        el.requestFullscreen?.();
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        webkitExitFullscreen?: () => Promise<void> | void;
+      };
+      const host = el as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void> | void;
+      };
+      const iframe = el.querySelector("iframe") as (HTMLElement & {
+        requestFullscreen?: () => Promise<void> | void;
+        webkitRequestFullscreen?: () => Promise<void> | void;
+      }) | null;
+
+      const isFullscreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+
+      if (!isFullscreen) {
+        const requestFullscreen =
+          host.requestFullscreen?.bind(host) ??
+          host.webkitRequestFullscreen?.bind(host) ??
+          iframe?.requestFullscreen?.bind(iframe) ??
+          iframe?.webkitRequestFullscreen?.bind(iframe);
+        requestFullscreen?.();
       } else {
-        document.exitFullscreen?.();
+        const exitFullscreen =
+          doc.exitFullscreen?.bind(doc) ??
+          doc.webkitExitFullscreen?.bind(doc);
+        exitFullscreen?.();
       }
     } catch {}
   };
+
+  const handleOverlayPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClickUntilRef.current = Date.now() + DOUBLE_TAP_MS + 40;
+      handleTapOrClick(e.clientX);
+    },
+    [handleTapOrClick]
+  );
+
+  const handleOverlayClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // بعض الأجهزة تولّد click بعد pointer/touch لنفس اللمسة
+      if (Date.now() < suppressClickUntilRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleTapOrClick(e.clientX);
+    },
+    [handleTapOrClick]
+  );
 
   if (!videoId) return null;
 
@@ -566,22 +616,13 @@ export function YouTubeOverlayPlayer({
           <p className="text-center text-sm font-medium text-white">{t("video.applyingQuality", "Applying quality...")}</p>
         </div>
       ) : null}
-      {/* طبقة سوداء سفلية عند الإيقاف لإخفاء اقتراحات يوتيوب الخلفية */}
-      {!isPlaying && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-1/2 bg-black" />
-      )}
       {/* طبقة علوية للتحكم — لا تغطي شريط الأدوات */}
       <div className="absolute inset-0 z-10 flex flex-col justify-end">
         {/* منطقة النقر للتشغيل في المنتصف — العلامة تظهر فقط عند الإيقاف */}
         <div
-          className="absolute inset-0 flex items-center justify-center"
-          onPointerDown={(e) => {
-            // على الهاتف: نفس اللمسة قد تولّد Touch ثم Click (فتتحول لضغطة مزدوجة بالغلط)
-            // نستخدم Pointer Events لتوحيد السلوك: ضغطة واحدة = تشغيل/إيقاف، ضغطتين = ±10 ثواني
-            e.preventDefault();
-            e.stopPropagation();
-            handleTapOrClick(e.clientX);
-          }}
+          className="absolute inset-0 flex touch-manipulation items-center justify-center"
+          onPointerUp={handleOverlayPointerUp}
+          onClick={handleOverlayClick}
           onDoubleClick={(e) => {
             // منع قيام المتصفح بتكبير/تحديد… إلخ، ونتعامل مع الدبل كليك بأنفسنا
             e.preventDefault();
@@ -593,8 +634,8 @@ export function YouTubeOverlayPlayer({
           aria-label={isPlaying ? t("video.pause", "Pause") : t("video.play", "Play")}
         >
           {!isPlaying && (
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-primary)]/90 text-white shadow-lg transition-all duration-200 hover:scale-105 hover:bg-[var(--color-primary)]">
-              <svg className="mr-1 h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-primary)]/90 text-white shadow-lg transition-all duration-200 hover:scale-105 hover:bg-[var(--color-primary)] sm:h-20 sm:w-20">
+              <svg className="mr-0.5 h-7 w-7 sm:mr-1 sm:h-10 sm:w-10" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
@@ -603,22 +644,22 @@ export function YouTubeOverlayPlayer({
 
         {/* شريط التحكم في الأسفل */}
         <div
-          className={`relative z-20 flex flex-col gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-8 transition-opacity duration-200 ${
+          className={`relative z-20 flex flex-col gap-1.5 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-6 transition-opacity duration-200 sm:gap-2 sm:px-3 sm:pb-2 sm:pt-8 ${
             isPlaying && !showControls ? "pointer-events-none opacity-0" : "opacity-100"
           }`}
         >
           {/* الصوت والجودة */}
-          <div className="flex items-center justify-end gap-4">
+          <div className="flex items-center justify-end gap-2 sm:gap-4">
             {/* الصوت */}
-            <div dir="ltr" className="flex items-center gap-1.5">
+            <div dir="ltr" className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => handleVolumeChange(volume - 10)}
                 disabled={!ready}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white/90 transition hover:bg-white/20 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/90 transition hover:bg-white/20 disabled:opacity-50 sm:h-8 sm:w-8"
                 aria-label={t("video.volumeDown", "Volume down")}
               >
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
                 </svg>
               </button>
@@ -629,17 +670,17 @@ export function YouTubeOverlayPlayer({
                 value={volume}
                 onChange={(e) => handleVolumeChange(Number(e.target.value))}
                 disabled={!ready}
-                className="h-1.5 w-20 cursor-pointer accent-[var(--color-primary)] disabled:opacity-50"
+                className="h-1.5 w-14 cursor-pointer accent-[var(--color-primary)] disabled:opacity-50 sm:w-20"
                 aria-label={t("video.volumeLevel", "Volume level")}
               />
               <button
                 type="button"
                 onClick={() => handleVolumeChange(volume + 10)}
                 disabled={!ready}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white/90 transition hover:bg-white/20 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/90 transition hover:bg-white/20 disabled:opacity-50 sm:h-8 sm:w-8"
                 aria-label={t("video.volumeUp", "Volume up")}
               >
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M3 9v6h4l5 5V4L7 9H3zm14 3v4h2v-4h2v-2h-2V9h-2v2h-2v2h2zm-2-3.99V7c0-1.1.9-2 2-2s2 .9 2 2v2.01c1.16.41 2 1.52 2 2.99 0 1.48-.84 2.58-2 2.99V17c0 1.1-.9 2-2 2s-2-.9-2-2v-2.01c-1.16-.41-2-1.52-2-2.99 0-1.48.84-2.58 2-2.99z" />
                 </svg>
               </button>
@@ -653,12 +694,12 @@ export function YouTubeOverlayPlayer({
                   setQualityOpen((o) => !o);
                 }}
                 disabled={!ready || qualityApplying}
-                className="flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1.5 text-xs text-white transition hover:bg-white/30 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-1 text-[10px] text-white transition hover:bg-white/30 disabled:opacity-50 sm:px-2.5 sm:py-1.5 sm:text-xs"
                 aria-label={t("video.changeQuality", "Change quality")}
                 aria-expanded={qualityOpen}
               >
                 {currentQuality ? (qualityLabels[currentQuality] ?? currentQuality) : t("video.quality", "Quality")}
-                <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <svg className="h-3 w-3 sm:h-3.5 sm:w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path d="M7 10l5 5 5-5z" />
                 </svg>
               </button>
@@ -686,30 +727,30 @@ export function YouTubeOverlayPlayer({
             </div>
           </div>
           {/* شريط التقديم والتأخير */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={togglePlay}
               disabled={!ready}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
               aria-label={isPlaying ? t("video.pause", "Pause") : t("video.play", "Play")}
             >
               {isPlaying ? (
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                 </svg>
               ) : (
-                <svg className="ml-0.5 h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="ml-0.5 h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
             </button>
-            <span className="min-w-[2.5rem] text-right text-xs text-white/90 tabular-nums">
+            <span className="min-w-[2.1rem] text-right text-[10px] text-white/90 tabular-nums sm:min-w-[2.5rem] sm:text-xs">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
             <div
               dir="ltr"
-              className="relative h-2 flex-1 cursor-pointer rounded-full bg-white/30"
+              className="relative h-1.5 flex-1 cursor-pointer rounded-full bg-white/30 sm:h-2"
               onClick={handleProgressClick}
             >
               <div
@@ -731,10 +772,10 @@ export function YouTubeOverlayPlayer({
               type="button"
               onClick={toggleFullscreen}
               disabled={!ready}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
               aria-label={t("video.fullscreen", "Fullscreen")}
             >
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
               </svg>
             </button>
