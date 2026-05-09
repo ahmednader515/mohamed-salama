@@ -141,6 +141,11 @@ export function YouTubeOverlayPlayer({
   const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    (/(iP(hone|od|ad))/i.test(navigator.userAgent) ||
+      (/\bMacintosh\b/i.test(navigator.userAgent) && typeof window !== "undefined" && "ontouchend" in window));
+
   const videoId = getYouTubeVideoId(videoUrl);
 
   const qualityLabels: Record<string, string> = {
@@ -302,10 +307,11 @@ export function YouTubeOverlayPlayer({
       new window.YT!.Player(playerDiv, {
         videoId,
         playerVars: {
-          // نخفي واجهة يوتيوب بالكامل ونعتمد على عناصر التحكم المخصصة
-          controls: 0,
+          // iOS (iPhone) لا يدعم fullscreen الحقيقي للـ iframe عبر Fullscreen API،
+          // لذلك نسمح بزر fullscreen الخاص بيوتيوب هناك فقط.
+          controls: isIOS ? 1 : 0,
           disablekb: 1,
-          fs: 0,
+          fs: isIOS ? 1 : 0,
           iv_load_policy: 3,
           cc_load_policy: 0,
           playsinline: 1,
@@ -409,7 +415,7 @@ export function YouTubeOverlayPlayer({
       setQualityApplying(false);
       if (playerDiv?.parentNode) playerDiv.parentNode.removeChild(playerDiv);
     };
-  }, [videoId, startProgressPoll, stopProgressPoll]);
+  }, [videoId, startProgressPoll, stopProgressPoll, isIOS]);
 
   const togglePlay = () => {
     const p = playerRef.current;
@@ -544,9 +550,8 @@ export function YouTubeOverlayPlayer({
 
       const isFullscreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
 
-      // iOS (خصوصًا iPhone) غالبًا لا يدعم Fullscreen API للـ iframe
-      const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-      const isIOS = /iP(hone|od|ad)/.test(ua) || (/\bMacintosh\b/.test(ua) && "ontouchend" in window);
+      // iOS: نعتمد على زر fullscreen داخل يوتيوب (controls/fs) للحصول على fullscreen الحقيقي
+      if (isIOS) return;
 
       if (pseudoFullscreen) {
         setPseudoFullscreen(false);
@@ -800,17 +805,19 @@ export function YouTubeOverlayPlayer({
                 aria-label={t("video.seek", "Seek video")}
               />
             </div>
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              disabled={!ready}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
-              aria-label={t("video.fullscreen", "Fullscreen")}
-            >
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
-              </svg>
-            </button>
+            {!isIOS ? (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                disabled={!ready}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
+                aria-label={t("video.fullscreen", "Fullscreen")}
+              >
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                </svg>
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
