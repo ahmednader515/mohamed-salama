@@ -674,7 +674,7 @@ export function YouTubeOverlayPlayer({
             />
             {/* منطقة لمس آمنة للتشغيل/الإيقاف (لا تغطي أدوات يوتيوب أسفل/أعلى) */}
             <div
-              className="absolute left-0 right-0 top-12 bottom-16 z-20 touch-manipulation"
+              className="absolute left-0 right-0 top-12 bottom-28 z-20 touch-manipulation"
               onPointerUp={handleOverlayPointerUp}
               onClick={handleOverlayClick}
               aria-hidden
