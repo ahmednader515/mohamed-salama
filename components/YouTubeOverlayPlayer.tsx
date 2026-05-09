@@ -655,11 +655,31 @@ export function YouTubeOverlayPlayer({
       ) : null}
       {/* طبقة علوية للتحكم — لا تغطي شريط الأدوات */}
       <div className="absolute inset-0 z-10 flex flex-col justify-end">
+        {/* iOS: نترك عناصر تحكم يوتيوب (للـ fullscreen الحقيقي) تمر للـ iframe قدر الإمكان،
+            ونمنع فقط مناطق "فتح على يوتيوب" الشائعة قدر المستطاع. */}
+        {isIOS ? (
+          <>
+            {/* شريط علوي صغير لمنع الضغط على عنوان/شعار يوتيوب الذي قد يفتح التطبيق */}
+            <div
+              className="absolute left-0 top-0 z-30 h-12 w-full"
+              onPointerUp={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              aria-hidden
+            />
+          </>
+        ) : null}
+
         {/* منطقة النقر للتشغيل في المنتصف — العلامة تظهر فقط عند الإيقاف */}
         <div
-          className="absolute inset-0 flex touch-manipulation items-center justify-center"
-          onPointerUp={handleOverlayPointerUp}
-          onClick={handleOverlayClick}
+          className={isIOS ? "absolute inset-0 flex items-center justify-center" : "absolute inset-0 flex touch-manipulation items-center justify-center"}
+          onPointerUp={isIOS ? undefined : handleOverlayPointerUp}
+          onClick={isIOS ? undefined : handleOverlayClick}
           onDoubleClick={(e) => {
             // منع قيام المتصفح بتكبير/تحديد… إلخ، ونتعامل مع الدبل كليك بأنفسنا
             e.preventDefault();
@@ -680,11 +700,12 @@ export function YouTubeOverlayPlayer({
         </div>
 
         {/* شريط التحكم في الأسفل */}
-        <div
-          className={`relative z-20 flex flex-col gap-1.5 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-6 transition-opacity duration-200 sm:gap-2 sm:px-3 sm:pb-2 sm:pt-8 ${
-            isPlaying && !showControls ? "pointer-events-none opacity-0" : "opacity-100"
-          }`}
-        >
+        {!isIOS ? (
+          <div
+            className={`relative z-20 flex flex-col gap-1.5 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-6 transition-opacity duration-200 sm:gap-2 sm:px-3 sm:pb-2 sm:pt-8 ${
+              isPlaying && !showControls ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
           {/* الصوت والجودة */}
           <div className="flex items-center justify-end gap-2 sm:gap-4">
             {/* الصوت */}
@@ -805,21 +826,20 @@ export function YouTubeOverlayPlayer({
                 aria-label={t("video.seek", "Seek video")}
               />
             </div>
-            {!isIOS ? (
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                disabled={!ready}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
-                aria-label={t("video.fullscreen", "Fullscreen")}
-              >
-                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
-                </svg>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              disabled={!ready}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-50 sm:h-9 sm:w-9"
+              aria-label={t("video.fullscreen", "Fullscreen")}
+            >
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+              </svg>
+            </button>
           </div>
-        </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
