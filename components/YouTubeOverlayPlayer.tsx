@@ -138,6 +138,7 @@ export function YouTubeOverlayPlayer({
   const [qualityOpen, setQualityOpen] = useState(false);
   const [qualityApplying, setQualityApplying] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const videoId = getYouTubeVideoId(videoUrl);
@@ -543,21 +544,48 @@ export function YouTubeOverlayPlayer({
 
       const isFullscreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
 
-      if (!isFullscreen) {
+      // iOS (خصوصًا iPhone) غالبًا لا يدعم Fullscreen API للـ iframe
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+      const isIOS = /iP(hone|od|ad)/.test(ua) || (/\bMacintosh\b/.test(ua) && "ontouchend" in window);
+
+      if (pseudoFullscreen) {
+        setPseudoFullscreen(false);
+        return;
+      }
+
+      if (!isFullscreen && !isIOS) {
         const requestFullscreen =
           host.requestFullscreen?.bind(host) ??
           host.webkitRequestFullscreen?.bind(host) ??
           iframe?.requestFullscreen?.bind(iframe) ??
           iframe?.webkitRequestFullscreen?.bind(iframe);
-        requestFullscreen?.();
+        if (requestFullscreen) {
+          requestFullscreen();
+        } else {
+          setPseudoFullscreen(true);
+        }
       } else {
         const exitFullscreen =
           doc.exitFullscreen?.bind(doc) ??
           doc.webkitExitFullscreen?.bind(doc);
-        exitFullscreen?.();
+        if (exitFullscreen && isFullscreen) exitFullscreen();
+        else setPseudoFullscreen(true);
       }
     } catch {}
   };
+
+  // قفل تمرير الصفحة عند pseudo fullscreen (مهم على iOS)
+  useEffect(() => {
+    if (!pseudoFullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+    };
+  }, [pseudoFullscreen]);
 
   const handleOverlayPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -585,7 +613,11 @@ export function YouTubeOverlayPlayer({
   return (
     <div
       ref={wrapperRef}
-      className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-black"
+      className={
+        pseudoFullscreen
+          ? "fixed inset-0 z-[1000] h-[100svh] w-[100vw] overflow-hidden bg-black"
+          : "relative aspect-video w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-black"
+      }
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
