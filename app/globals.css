@@ -473,3 +473,13 @@ html:not(.light):not(.dark) .home-teachers-hero-blend {
     opacity: 0;
   }
 }
+
+/* Plyr (lesson YouTube): match platform primary + card radius */
+.plyr-lesson-video .plyr {
+  --plyr-color-main: var(--color-primary);
+  border-radius: var(--radius-card);
+}
+
+.plyr-lesson-video .plyr__video-embed iframe {
+  border-radius: var(--radius-card);
+}
