@@ -96,16 +96,20 @@ export function YouTubeOverlayPlayer({
       removeShieldNodeOnly();
     };
 
+    /** لا نستخدم preventDefault على اللمس/المؤشر — على iOS/Safari قد يقطع تشغيل الفيديو */
     const attachBlockHandlers = (node: HTMLElement) => {
-      const stop: EventListener = (e) => {
-        if (e.cancelable) e.preventDefault();
+      const stopBubble: EventListener = (e) => {
         e.stopPropagation();
       };
-      node.addEventListener("pointerdown", stop, true);
-      node.addEventListener("pointerup", stop, true);
-      node.addEventListener("click", stop, true);
-      node.addEventListener("touchstart", stop, { capture: true, passive: false });
-      node.addEventListener("touchend", stop, { capture: true, passive: false });
+      const stopClick: EventListener = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+      };
+      node.addEventListener("pointerdown", stopBubble, true);
+      node.addEventListener("pointerup", stopBubble, true);
+      node.addEventListener("click", stopClick, true);
+      node.addEventListener("touchstart", stopBubble, { capture: true, passive: true });
+      node.addEventListener("touchend", stopBubble, { capture: true, passive: true });
     };
 
     /** شريط علوي فقط داخل منطقة الفيديو — لا عناصر في الأسفل */
@@ -123,7 +127,6 @@ export function YouTubeOverlayPlayer({
       topGuard.setAttribute("aria-hidden", "true");
       topGuard.setAttribute("data-lesson-yt-top-guard", "");
       topGuard.className = "pointer-events-auto bg-transparent";
-      topGuard.style.touchAction = "none";
       topGuard.style.position = "absolute";
       topGuard.style.left = "0";
       topGuard.style.right = "0";
@@ -157,6 +160,10 @@ export function YouTubeOverlayPlayer({
       fullscreenTopGuardMoRef.current = mo;
     };
 
+    const isTouch =
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0));
+
     const player = new Plyr(el, {
       controls: [
         "play-large",
@@ -172,9 +179,11 @@ export function YouTubeOverlayPlayer({
       ],
       settings: ["quality", "speed"],
       ratio: "16:9",
-      fullscreen: { enabled: true, fallback: true, iosNative: true },
-      hideControls: true,
-      clickToPlay: true,
+      // iOS + YouTube: يجب تعطيل iosNative حتى يظهر زر fullscreen ويعمل fallback (كود Plyr)
+      fullscreen: { enabled: true, fallback: true, iosNative: false },
+      autopause: false,
+      hideControls: !isTouch,
+      clickToPlay: !isTouch,
       keyboard: { focused: true, global: false },
       youtube: {
         rel: 0,
@@ -239,17 +248,16 @@ export function YouTubeOverlayPlayer({
           className="h-full w-full"
         />
       </div>
-      {/* يمنع النقر على عنوان/شريط يوتيوب العلوي (لا يظهر شيء بصريًا) */}
+      {/* يمنع تمرير النقر إلى عنوان يوتيوب — بدون preventDefault على اللمس حتى لا يتعطل التشغيل على الجوال */}
       <div
-        className="absolute inset-x-0 top-0 z-[40] h-14 touch-none bg-transparent sm:h-16"
+        className="absolute inset-x-0 top-0 z-[40] h-12 bg-transparent sm:h-14 md:h-16"
         aria-hidden
         onPointerDown={(e) => {
-          e.preventDefault();
           e.stopPropagation();
         }}
         onClick={(e) => {
-          e.preventDefault();
           e.stopPropagation();
+          e.preventDefault();
         }}
       />
       {studentCopyrightCode?.trim()
